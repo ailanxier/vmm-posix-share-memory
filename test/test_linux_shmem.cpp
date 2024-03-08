@@ -41,7 +41,6 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-
     // 关闭共享内存文件描述符
     if (close(shm_fd) == -1) {
         perror("close");
