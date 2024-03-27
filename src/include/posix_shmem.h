@@ -15,7 +15,6 @@
 struct shm_name {
     char *name;
     int name_len;
-    char *shm_name;
     int fd;
 };
 

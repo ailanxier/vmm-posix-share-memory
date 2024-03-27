@@ -1,13 +1,11 @@
 #include"include/posix_shmem.h"
 
 int shyper_shm_open(const char *name, int oflag, mode_t mode) {
-    char shmem_name[SHM_NAME_MAX_LEN];
     int fd, shyper_fd;
     struct shm_name shm;
 
     shm.name = name;
     shm.name_len = strlen(name);
-    shm.shm_name = shmem_name;
     shyper_fd = open("/dev/shyper", O_RDWR);
 
     ioctl(shyper_fd, 0x1302, &shm);
