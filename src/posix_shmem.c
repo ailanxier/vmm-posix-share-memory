@@ -1,7 +1,9 @@
 #include"include/posix_shmem.h"
+#include <linux/sched.h>
 
 int shyper_shm_open(const char *name, int oflag, mode_t mode) {
-    int fd, shyper_fd;
+    u64 fd;
+    int shyper_fd;
     struct shm_name shm;
 
     shm.name = name;
@@ -19,12 +21,13 @@ int shyper_shm_open(const char *name, int oflag, mode_t mode) {
     return fd;
 }
 
-int shyper_ftruncate(int fd, off_t length) {
+int shyper_ftruncate(u64 fd, off_t length) {
     int shyper_fd, ret;
     struct shm_size size;
 
     size.shm_fd = fd;
     size.size = length;
+    size.pid = current->pid;
     shyper_fd = open("/dev/shyper", O_RDWR);
 
     ioctl(shyper_fd, 0x1303, &size);
@@ -38,21 +41,26 @@ int shyper_ftruncate(int fd, off_t length) {
     return ret;
 }
 
-void *shyper_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+void *shyper_mmap(void *addr, size_t length, int prot, int flags, u64 fd, off_t offset) {
     int shyper_fd;
-    struct shm_mmap mmap;
+    struct shm_mmap shmmap;
+    int ipa_offset;
 
-    mmap.addr = addr;
-    mmap.length = length;
-    mmap.prot = prot;
-    mmap.flags = flags;
-    mmap.fd = fd;
-    mmap.offset = offset;
+    shmmap.addr = addr;
+    shmmap.length = length;
+    shmmap.prot = prot;
+    shmmap.flags = flags;
+    shmmap.fd = fd;
+    shmmap.offset = offset;
     shyper_fd = open("/dev/shyper", O_RDWR);
 
-    ioctl(shyper_fd, 0x1304, &mmap);
+    ioctl(shyper_fd, 0x1304, &shmmap);
+    ipa_offset = shmmap.ret;
 
-    if (mmap.ret == MAP_FAILED) {
+    int memfd = open("/dev/mem", O_RDWR | O_SYNC);
+    void *va = mmap(NULL, 4 << 10, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, addr);
+
+    if (shmmap.ret == MAP_FAILED) {
         perror("mmap");
         return MAP_FAILED;
     }

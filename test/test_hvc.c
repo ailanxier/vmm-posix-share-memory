@@ -19,7 +19,7 @@ int test_shmem_init(char *name) {
     } ioctl_release;
     ioctl_release.name = name;
     ioctl_release.name_len = strlen(name);
-    ioctl(shyper_fd, 0x0501, &ioctl_release);
+    ioctl(shyper_fd, 0x1302, &ioctl_release);
     close(shyper_fd);
     return 0;
 }

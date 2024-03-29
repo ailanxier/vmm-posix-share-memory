@@ -9,18 +9,20 @@
 #include <unistd.h>
 #include <sys/types.h>
 
+#define u64 unsigned long long
 #define SHM_NAME_MAX_LEN 256
 #define MAP_FAILED ((void *) -1)
 
 struct shm_name {
     char *name;
     int name_len;
-    int fd;
+    u64 fd;
 };
 
 struct shm_size {
-    int shm_fd;
+    u64 shm_fd;
     size_t size;
+    u64 pid;
     int ret;
 };
 
@@ -29,7 +31,7 @@ struct shm_mmap {
     size_t length;
     int prot;
     int flags;
-    int fd;
+    u64 fd;
     off_t offset;
     void *ret;
 };
@@ -48,9 +50,9 @@ struct shm_unlink {
 
 int shyper_shm_open(const char *name, int oflag, mode_t mode);
 
-int shyper_ftruncate(int fd, off_t length);
+int shyper_ftruncate(u64 fd, off_t length);
 
-void *shyper_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+void *shyper_mmap(void *addr, size_t length, int prot, int flags, u64 fd, off_t offset);
 
 int shyper_munmap(void *addr, size_t length);
 
