@@ -17,6 +17,9 @@ struct shm_name {
     char *name;
     int name_len;
     u64 fd;
+    int oflag;
+    mode_t mode;
+    u64 ipa;
 };
 
 struct shm_size {
@@ -24,6 +27,7 @@ struct shm_size {
     size_t size;
     u64 pid;
     int ret;
+    u64 ipa;
 };
 
 struct shm_mmap {
@@ -34,18 +38,21 @@ struct shm_mmap {
     u64 fd;
     off_t offset;
     void *ret;
+    u64 ipa;
 };
 
 struct shm_unmap {
     void *addr;
     size_t length;
     int ret;
+    u64 ipa;
 };
 
 struct shm_unlink {
     char *name;
     int name_len;
     int ret;
+    u64 ipa;
 };
 
 int shyper_shm_open(const char *name, int oflag, mode_t mode);
@@ -56,6 +63,6 @@ void *shyper_mmap(void *addr, size_t length, int prot, int flags, u64 fd, off_t 
 
 int shyper_munmap(void *addr, size_t length);
 
-int shm_unlink(const char *name);
+int shyper_unlink(const char *name);
 
 #endif

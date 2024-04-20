@@ -3,6 +3,8 @@
         "*.sy": "c",
         "types.h": "c",
         "bitset": "c",
-        "string_view": "c"
+        "string_view": "c",
+        "mman.h": "c",
+        "stat.h": "c"
     }
 }
