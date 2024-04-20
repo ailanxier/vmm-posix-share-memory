@@ -36,21 +36,21 @@ int main() {
     printf("start: %p\n", ptr);
 
     // 使用共享内存
-    sprintf((char*)ptr, "Hello, shared memory!");
+    // sprintf((char*)ptr, "Hello, shared memory!");
 
     printf("mmap success: %s\n", (char*)ptr);
 
-    // 取消映射共享内存
-    if (shyper_munmap(ptr, SHM_SIZE) == -1) {
-        perror("munmap");
-        exit(EXIT_FAILURE);
-    }
+    // // 取消映射共享内存
+    // if (shyper_munmap(ptr, SHM_SIZE) == -1) {
+    //     perror("munmap");
+    //     exit(EXIT_FAILURE);
+    // }
 
-    // 删除共享内存
-    if (shyper_unlink(SHM_NAME) == -1) {
-        perror("unlink");
-        exit(EXIT_FAILURE);
-    }
+    // // 删除共享内存
+    // if (shyper_unlink(SHM_NAME) == -1) {
+    //     perror("unlink");
+    //     exit(EXIT_FAILURE);
+    // }
 
     printf("all success");
     return 0;
