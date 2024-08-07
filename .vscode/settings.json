@@ -1,10 +1,21 @@
 {
     "files.associations": {
+        "*.ejs": "html",
+        "Makefile": "makefile",
+        "*.S": "platformio-debug.asm",
+        "*.ld": "linkerscript",
         "*.sy": "c",
         "types.h": "c",
         "bitset": "c",
         "string_view": "c",
         "mman.h": "c",
-        "stat.h": "c"
+        "stat.h": "c",
+        "posix_shmem.h": "c",
+        "fcntl.h": "c",
+        "unistd.h": "c",
+        "stdlib.h": "c",
+        "test_utils.h": "c",
+        "string.h": "c",
+        "strings.h": "c"
     }
 }

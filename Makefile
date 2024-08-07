@@ -1,13 +1,35 @@
-SUBDIRS = test
+# Compiler
+CC = gcc
 
-.PHONY: all $(SUBDIRS) clean
+# Compiler flags
+CFLAGS = -g
 
-all: $(SUBDIRS)
+# Source files
+LIB_SRCS = src/posix_shmem.c
 
-$(SUBDIRS):
-	$(MAKE) -C $@
+TEST_SRCS ?= test/mvm_write.c
 
+# Output executable
+TARGET ?= w
+
+# Output directory (default value)
+OUTPUT_DIR ?= ./build
+
+all: $(OUTPUT_DIR) $(OUTPUT_DIR)/$(TARGET)
+
+# Ensure the output directory exists
+$(OUTPUT_DIR):
+	mkdir -p $(OUTPUT_DIR)
+
+# Default rule
+
+# Rule for building the target
+$(OUTPUT_DIR)/$(TARGET): $(LIB_SRCS) $(TEST_SRCS)
+	$(CC) -o $(OUTPUT_DIR)/$(TARGET) $(LIB_SRCS) $(TEST_SRCS) $(CFLAGS)
+
+# Clean rule
 clean:
-	@for dir in $(SUBDIRS); do \
-		$(MAKE) -C $$dir clean; \
-	done
+	rm -f $(OUTPUT_DIR)/$(TARGET)
+
+# Phony targets
+.PHONY: all clean

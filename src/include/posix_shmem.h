@@ -8,6 +8,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <string.h>
 
 #define u64 unsigned long long
 #define SHM_NAME_MAX_LEN 256
@@ -24,7 +25,7 @@ struct shm_name {
 
 struct shm_size {
     u64 shm_fd;
-    size_t size;
+    u64 size;
     u64 pid;
     int ret;
     u64 ipa;
@@ -32,7 +33,7 @@ struct shm_size {
 
 struct shm_mmap {
     void *addr;
-    size_t length;
+    u64 length;
     int prot;
     int flags;
     u64 fd;
@@ -64,5 +65,7 @@ void *shyper_mmap(void *addr, size_t length, int prot, int flags, u64 fd, off_t 
 int shyper_munmap(void *addr, size_t length);
 
 int shyper_unlink(const char *name);
+
+void shyper_set_ipa(u64 size);
 
 #endif

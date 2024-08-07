@@ -1,3 +1,0 @@
-rsync -avhz oyhd@192.168.106.105:/home/oyhd/Desktop/vmm-posix-share-memory/ ../ --progress
-gcc -o test_shyper_shmem test_shyper_shmem.c ../src/posix_shmem.c -g
-./test_shyper_shmem

@@ -1,4 +1,6 @@
-#include"include/posix_shmem.h"
+#include "include/posix_shmem.h"
+#include "include/test_utils.h"
+
 
 int shyper_shm_open(const char *name, int oflag, mode_t mode) {
     u64 fd;
@@ -13,8 +15,8 @@ int shyper_shm_open(const char *name, int oflag, mode_t mode) {
 
     fd = shm.fd;
     if (fd == -1) {
-        perror("open");
-        return -1;
+        perror("shm_open");
+        exit(EXIT_FAILURE);
     }
 
     return fd;
@@ -34,7 +36,7 @@ int shyper_ftruncate(u64 fd, off_t length) {
     ret = size.ret;
     if (ret == -1) {
         perror("ftruncate");
-        return -1;
+        exit(EXIT_FAILURE);
     }
 
     return ret;
@@ -57,11 +59,10 @@ void *shyper_mmap(void *addr, size_t length, int prot, int flags, u64 fd, off_t 
     ipa_offset = shmmap.offset;
 
     int memfd = open("/dev/posix_shmem", O_RDWR);
-    void *va = mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, ipa_offset);
-
+    void *va = mmap(NULL, shmmap.length, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, ipa_offset);
     if (shmmap.ret == MAP_FAILED) {
         perror("mmap");
-        return MAP_FAILED;
+        exit(EXIT_FAILURE);
     }
 
     return va;
@@ -103,4 +104,12 @@ int shyper_unlink(const char *name) {
     }
 
     return ret;
+}
+
+
+void shyper_set_ipa(u64 size) {
+    int shyper_fd;
+    shyper_fd = open("/dev/shyper", O_RDWR);
+    ioctl(shyper_fd, 0x1307, &size);
+    test_fprintf("size = %llu\n", size);
 }
