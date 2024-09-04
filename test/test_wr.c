@@ -6,10 +6,8 @@
 #include <unistd.h>
 #include "../src/include/posix_shmem.h"
 #include "../src/include/test_utils.h"
-typedef int TYPE;
-
 #define SHM_NAME "shyper"
-TYPE shm_size;
+int shm_size;
 
 int parameter_check(int argc, char *argv[]) {
     if (argc != 3) {
@@ -40,7 +38,7 @@ int parameter_check(int argc, char *argv[]) {
         test_fprintf("Size is too large: %s\n", argv[2]);
         exit(EXIT_FAILURE);
     }
-    shm_size = (TYPE)size * KB;
+    shm_size = size * KB;
 
     test_fprintf("shm_size = %ld KB\n", size);
 
@@ -61,12 +59,12 @@ int main(int argc, char *argv[]) {
     void *ptr = shyper_mmap(0, shm_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
 
     // test_fprintf("address of the shared memory mapping: %p\n", ptr);
-    // TYPE *rp_size = (TYPE *)ptr;
+    // int *rp_size = (int *)ptr;
     // shyper_set_ipa(rp_size[1]);
 
     if (is_read) {
         // read shared memory
-        TYPE *rp = (TYPE *)ptr;
+        int *rp = (int *)ptr;
         test_fprintf("Read data[0] = %d\n", rp[0]);
         int cmd;
         while(scanf("%d", &cmd) != EOF){
@@ -77,13 +75,13 @@ int main(int argc, char *argv[]) {
         }
     } else {
         // write shared memory
-        TYPE *wp = (TYPE *)ptr;
+        int *wp = (int *)ptr;
         srand((unsigned int)time(NULL));
         wp[0] = rand();
         test_fprintf("Write data[0] = %d\n", wp[0]);
-        TYPE *rp = (TYPE *)ptr;
+        int *rp = (int *)ptr;
         test_fprintf("Read data[0] = %d\n", rp[0]);
-        // TYPE *rp2 = (TYPE *)ptr;
+        // int *rp2 = (int *)ptr;
         // test_fprintf("Read len = %d\n", rp2[1]);
     }
     return 0;

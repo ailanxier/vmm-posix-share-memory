@@ -6,10 +6,9 @@
 #include <unistd.h>
 #include "../src/include/posix_shmem.h"
 #include "../src/include/test_utils.h"
-typedef int TYPE;
 
 #define SHM_NAME "shyper"
-TYPE shm_size;
+int shm_size;
 
 void parameter_check(int argc, char *argv[]) {
     if (argc != 2) {
@@ -30,7 +29,7 @@ void parameter_check(int argc, char *argv[]) {
         test_fprintf("Size is too large: %s\n", argv[1]);
         exit(EXIT_FAILURE);
     }
-    shm_size = (TYPE)size * KB;
+    shm_size = size * KB;
 
     test_fprintf("shm_size = %ld KB\n", size);
 }
@@ -54,24 +53,10 @@ int main(int argc, char *argv[]) {
     register uint64 real_sum = 0, sum = 0;
     int total = shm_size / 4;
     int actual_wr_size = total * 4;
-    // TYPE* num = malloc(actual_wr_size);
 
-    // for(register int i = 0; i < total; i++){
-    //     num[i] = rand() % 1000;
-    // }
-    // register int cnt = 0;
+    register int *right = (int*)((char *)ptr + actual_wr_size);
 
-//     register TYPE *wr_p = ptr;
-    register TYPE *right = (TYPE*)((char *)ptr + actual_wr_size);
-   
-// 	while (wr_p + 8 <= right) {
-// #define	WRITE(i)	wr_p[i] = num[cnt++];
-// 		WRITE(0) WRITE(1) WRITE(2) WRITE(3) WRITE(4) WRITE(5) WRITE(6)
-// 		WRITE(7) 
-// 		wr_p += 8;
-// 	}
-
-    register TYPE *rd_p = ptr;
+    register int *rd_p = ptr;
     while (rd_p + 8 <= right) {
 #define	READ(i)	rd_p[i]+
         sum += 
@@ -80,24 +65,6 @@ int main(int argc, char *argv[]) {
         rd_p += 8;
     }
 
-    // for(register int i = 0; i < cnt; i++){
-    //     real_sum += num[i];
-    // }
     test_fprintf("GVM read sum = %llu\n", sum);
-    // uint64 diff = sum - real_sum;
-    // test_fprintf("diff = %llu, real_sum = %llu, sum = %llu\n", diff, real_sum, sum);
-    // if (diff != 0) {
-    //     register TYPE *rd_p = ptr;
-    //     cnt = 0;
-    //     while (rd_p <= right) {
-    //         if(*rd_p != num[cnt]){
-    //             test_fprintf("Error: rd_p = %d, num[%d] = %d\n", *rd_p, cnt, num[cnt]);
-    //             exit(1);
-    //         }
-    //         cnt++;
-    //         rd_p += 4;
-    //     }
-    // }
-    // test_fprintf("success");
     return 0;
 }

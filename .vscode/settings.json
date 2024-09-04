@@ -16,6 +16,8 @@
         "stdlib.h": "c",
         "test_utils.h": "c",
         "string.h": "c",
-        "strings.h": "c"
+        "strings.h": "c",
+        "irqnr.h": "c",
+        "time.h": "c"
     }
 }

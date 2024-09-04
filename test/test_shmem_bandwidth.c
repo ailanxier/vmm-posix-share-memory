@@ -6,10 +6,9 @@
 #include <unistd.h>
 #include "../src/include/posix_shmem.h"
 #include "../src/include/test_utils.h"
-typedef int TYPE;
 
 #define SHM_NAME "shyper"
-TYPE shm_size;
+int shm_size;
 
 int parameter_check(int argc, char *argv[]) {
     if (argc != 3) {
@@ -42,7 +41,7 @@ int parameter_check(int argc, char *argv[]) {
         test_fprintf("Size is too large: %s\n", argv[2]);
         exit(EXIT_FAILURE);
     }
-    shm_size = (TYPE)size * KB;
+    shm_size = size * KB;
 
     test_fprintf("shm_size = %ld KB\n", size);
 
@@ -70,15 +69,15 @@ int main(int argc, char *argv[]) {
     register uint64 real_sum = 0, sum = 0;
     int total = shm_size / 4;
     int actual_wr_size = total * 4;
-    TYPE* num = malloc(actual_wr_size);
+    int* num = malloc(actual_wr_size);
 
     for(register int i = 0; i < total; i++){
         num[i] = rand() % 1000;
     }
     register int cnt = 0;
 
-    register TYPE *wr_p = ptr;
-    register TYPE *right = (TYPE*)((char *)ptr + actual_wr_size);
+    register int *wr_p = ptr;
+    register int *right = (int*)((char *)ptr + actual_wr_size);
     if(!is_read){
         settime(0);
         start(0);
@@ -103,7 +102,7 @@ int main(int argc, char *argv[]) {
     if(is_read){
         settime(0);
         start(0);    
-        register TYPE *rd_p = ptr;
+        register int *rd_p = ptr;
         while (rd_p + 8 <= right) {
 #define	DOIT(i)	rd_p[i]+
             sum += 
@@ -114,14 +113,14 @@ int main(int argc, char *argv[]) {
 #undef	DOIT
     }
 
-    calculate_bandwidth(stop(0, 0), sizeof(TYPE) * total, 1);
+    calculate_bandwidth(stop(0, 0), sizeof(int) * total, 1);
     for(register int i = 0; i < cnt; i++){
         real_sum += num[i];
     }
     uint64 diff = sum - real_sum;
     if (is_read && diff != 0) {
         test_fprintf("Error: sum is not equal, diff = %llu, real_sum = %llu, sum = %llu\n", diff, real_sum, sum);
-        register TYPE *rd_p = ptr;
+        register int *rd_p = ptr;
         cnt = 0;
         while (rd_p <= right) {
             if(*rd_p != num[cnt]){

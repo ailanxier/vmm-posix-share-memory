@@ -9,10 +9,25 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <string.h>
+#include <signal.h>
+#include <unistd.h>
 
+#define MVM_READ_NAME  "mvm_read_shmem"
+#define MVM_WRITE_NAME "mvm_write_shmem"
+#define SHMEM_NAME_MAX_LEN 100
+#define SHMEM_SIZE 4096
+#define SHMEM_NUM 3
 #define u64 unsigned long long
-#define SHM_NAME_MAX_LEN 256
 #define MAP_FAILED ((void *) -1)
+#define NEXT(x) ((x + 1) % SHMEM_NUM)
+#define WRITE   1
+#define READ    0
+#define ERROR_SHM_FULL  10
+#define ERROR_SHM_EMPTY 11
+extern char *shm_read_start[SHMEM_NUM];
+extern char *shm_write_start[SHMEM_NUM];
+extern char *shm_write_pointer[SHMEM_NUM];
+extern char *shm_read_pointer[SHMEM_NUM];
 
 struct shm_name {
     char *name;
@@ -56,6 +71,11 @@ struct shm_unlink {
     u64 ipa;
 };
 
+struct shm_notify{
+    char *name;
+    int name_len;
+};
+
 int shyper_shm_open(const char *name, int oflag, mode_t mode);
 
 int shyper_ftruncate(u64 fd, off_t length);
@@ -66,6 +86,16 @@ int shyper_munmap(void *addr, size_t length);
 
 int shyper_unlink(const char *name);
 
-void shyper_set_ipa(u64 size);
+void *open_new_shmem(const char *name, int size);
+
+void init_shmem();
+
+int set_shmem_data(int shm_id, const char *data, int size);
+
+int get_shmem_data(int shm_id, char *data, int size);
+
+int send_message(int len, const char *data);
+
+int recv_message(char *data);
 
 #endif

@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <stdarg.h>
+#include <time.h>
 
 typedef unsigned long long uint64;
 static struct timeval start_tv, stop_tv;
@@ -85,7 +86,13 @@ static uint64 stop(struct timeval *begin, struct timeval *end){
 }
 
 static uint64 gettime(void){
-	return (tvdelta(&start_tv, &stop_tv));
+    struct timespec ts;
+    u64 receive_time_ns;
+
+    // 获取当前时间（纳秒）
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    receive_time_ns = ts.tv_sec * 1000000000LL + ts.tv_nsec;
+	return receive_time_ns / 1000;
 }
 
 /*

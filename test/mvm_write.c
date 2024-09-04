@@ -6,10 +6,8 @@
 #include <unistd.h>
 #include "../src/include/posix_shmem.h"
 #include "../src/include/test_utils.h"
-typedef int TYPE;
-
 #define SHM_NAME "shyper"
-TYPE shm_size;
+int shm_size;
 
 void parameter_check(int argc, char *argv[]) {
     if (argc != 2) {
@@ -30,7 +28,7 @@ void parameter_check(int argc, char *argv[]) {
         test_fprintf("Size is too large: %s\n", argv[1]);
         exit(EXIT_FAILURE);
     }
-    shm_size = (TYPE)size * KB;
+    shm_size = size * KB;
 
     test_fprintf("shm_size = %ld KB\n", size);
 }
@@ -56,15 +54,15 @@ int main(int argc, char *argv[]) {
     register uint64 real_sum = 0, sum = 0;
     int total = shm_size / 4;
     int actual_wr_size = total * 4;
-    TYPE* num = malloc(actual_wr_size);
+    char* num = malloc(actual_wr_size);
 
     for(register int i = 0; i < total; i++){
         num[i] = rand() % 1000;
     }
     register int cnt = 0;
 
-    register TYPE *wr_p = ptr;
-    register TYPE *right = (TYPE*)((char *)ptr + actual_wr_size);
+    register int *wr_p = ptr;
+    register int *right = (int*)((char *)ptr + actual_wr_size);
    
 	while (wr_p + 8 <= right) {
 #define	WRITE(i)	wr_p[i] = num[cnt++];
@@ -73,7 +71,7 @@ int main(int argc, char *argv[]) {
 		wr_p += 8;
 	}
 
-    register TYPE *rd_p = ptr;
+    register int *rd_p = ptr;
     while (rd_p + 8 <= right) {
 #define	READ(i)	rd_p[i]+
         sum += 
@@ -88,7 +86,7 @@ int main(int argc, char *argv[]) {
     uint64 diff = sum - real_sum;
     test_fprintf("diff = %llu, real_sum = %llu, sum = %llu\n", diff, real_sum, sum);
     if (diff != 0) {
-        register TYPE *rd_p = ptr;
+        register int *rd_p = ptr;
         cnt = 0;
         while (rd_p <= right) {
             if(*rd_p != num[cnt]){
