@@ -8,9 +8,12 @@ char *shm_write_start[SHMEM_NUM];
 char *shm_read_start[SHMEM_NUM];
 char *shm_write_pointer[SHMEM_NUM];
 char *shm_read_pointer[SHMEM_NUM];
-int shyper_fd, memfd, pid;
-uint64 mvm_start;
-char temp_msg[3000];
+char temp_msg[SHMEM_SIZE], shmem_name[SHMEM_NAME_MAX_LEN];
+
+#ifdef TEST_TIME
+    int shyper_fd, mem_fd, pid, write_start_cur, write_end_cur, signal_cur, read_end_cur;
+    u64* user_write_start, * user_write_end, * user_signal, * user_read_end;
+#endif
 
 int shyper_shm_open(const char *name, int oflag, mode_t mode) {
     u64 fd;
@@ -61,7 +64,7 @@ void *shyper_mmap(void *addr, size_t length, int prot, int flags, u64 fd, off_t 
     ioctl(shyper_fd, 0x1304, &shmmap);
     ipa_offset = shmmap.offset;
 
-    void *va = mmap(NULL, shmmap.length, PROT_READ | PROT_WRITE, MAP_SHARED, memfd, ipa_offset);
+    void *va = mmap(NULL, shmmap.length, PROT_READ | PROT_WRITE, MAP_SHARED, mem_fd, ipa_offset);
     if (shmmap.ret == MAP_FAILED) {
         perror("mmap");
         exit(EXIT_FAILURE);
@@ -84,7 +87,6 @@ int shyper_munmap(void *addr, size_t length) {
         perror("munmap");
         return -1;
     }
-    close(shyper_fd);
     return ret;
 }
 
@@ -112,24 +114,44 @@ void *open_new_shmem(const char *name, int size) {
 }
 
 void signal_recv_message_wrapper(int signum) {
+#ifdef TEST_TIME
+    user_signal[signal_cur++] = gettime();
+#endif
     recv_message(temp_msg);
-    test_fprintf("Received message: %s\n", temp_msg);
+    // test_fprintf("Received message: %s\n", temp_msg);
 }
 
-void init_shmem() {
+void init_shmem(int test_cnt) {
     shyper_fd = open("/dev/shyper", O_RDWR);
-    memfd = open("/dev/posix_shmem", O_RDWR);
+    mem_fd = open("/dev/posix_shmem", O_RDWR);
     ioctl(shyper_fd, 0x1002, getpid());
-    char name[SHMEM_NAME_MAX_LEN];
+#ifdef TEST_TIME
+    // set kernel timer
+    ioctl(shyper_fd, 0x1300, test_cnt);
+    user_write_start = (u64 *)malloc(sizeof(u64) * test_cnt);
+    user_write_end = (u64 *)malloc(sizeof(u64) * test_cnt);
+    user_signal = (u64 *)malloc(sizeof(u64) * test_cnt);
+    user_read_end = (u64 *)malloc(sizeof(u64) * test_cnt);
+    if (user_write_start == NULL || user_read_end == NULL) {
+        perror("failed to malloc mvm_start and mvm_end");
+        exit(EXIT_FAILURE);
+    }
+    write_start_cur = read_end_cur = 0;
+#endif
     for (int i = 0; i < SHMEM_NUM; i++) {
-        sprintf(name, "%s_%d", MVM_WRITE_NAME, i);
-        shm_write_pointer[i] = shm_write_start[i] = open_new_shmem(name, SHMEM_SIZE);
-        sprintf(name, "%s_%d", MVM_READ_NAME, i);
-        shm_read_pointer[i] = shm_read_start[i] = open_new_shmem(name, SHMEM_SIZE);
+        sprintf(shmem_name, "%s_%d", MVM_WRITE_NAME, i);
+        shm_write_pointer[i] = shm_write_start[i] = open_new_shmem(shmem_name, SHMEM_SIZE);
+        sprintf(shmem_name, "%s_%d", MVM_READ_NAME, i);
+        shm_read_pointer[i] = shm_read_start[i] = open_new_shmem(shmem_name, SHMEM_SIZE);
     }
     test_fprintf("Share memory %s_0 ~ %d and %s_0 ~ %d are created\n", MVM_WRITE_NAME, SHMEM_NUM - 1, MVM_READ_NAME, SHMEM_NUM - 1);
     shm_write_cur_id = shm_read_cur_id = 0;
-    signal(SIGUSR1, signal_recv_message_wrapper);
+
+    struct sigaction sa_usr1;
+    sa_usr1.sa_handler = signal_recv_message_wrapper;
+    sa_usr1.sa_flags = 0;
+    sigemptyset(&sa_usr1.sa_mask);
+    sigaction(SIGUSR1, &sa_usr1, NULL);
 }
 
 // Endianness must be the same. Zephyr is little-endian.
@@ -169,16 +191,19 @@ int is_valid(int shm_id, int is_write) {
 }
 
 void notify_gvm(int shm_id) {
-    char *name = (char *)malloc(SHMEM_NAME_MAX_LEN);
-    sprintf(name, "%s_%d", MVM_WRITE_NAME, shm_id);
+    sprintf(shmem_name, "%s_%d", MVM_WRITE_NAME, shm_id);
     struct shm_notify notify;
-    notify.name = name;
-    notify.name_len = strlen(name);
+    notify.name = shmem_name;
+    notify.name_len = strlen(shmem_name);
     ioctl(shyper_fd, 0x1307, &notify);
 }
 
 int send_message(int len, const char *data) {
-    // mvm_start = gettime();
+#ifdef TEST_TIME
+    // static int cnt = 0;
+    // test_fprintf("send cnt:%d\n", cnt++);
+    user_write_start[write_start_cur++] = gettime();
+#endif
     if(is_valid(shm_write_cur_id, WRITE)){
         test_fprintf("shmem pool %s is full, cur shm_id is %d\n", MVM_WRITE_NAME, shm_write_cur_id);
         return ERROR_SHM_FULL;
@@ -190,7 +215,10 @@ int send_message(int len, const char *data) {
     // set the flag to VALID after writing the message
     shm_write_pointer[shm_write_cur_id] = shm_write_start[shm_write_cur_id];
     set_shmem_data(shm_write_cur_id, &VALID, sizeof(char));
-    
+
+#ifdef TEST_TIME
+    user_write_end[write_end_cur++] = gettime();
+#endif    
     notify_gvm(shm_write_cur_id);
     shm_write_cur_id = NEXT(shm_write_cur_id);
     return 0;
@@ -212,9 +240,57 @@ int recv_message(char *data) {
     char *wr = shm_read_start[shm_read_cur_id];
     *wr = INVALID;
 
-    shm_read_cur_id = NEXT(shm_read_cur_id);    
-    // uint64 mvm_end = gettime();
-    // test_fprintf("mvm ioctl -> hvc -> hypervisor -> zephyr -> hypervisor -> kernel -> mvm: %llu us\n", mvm_end - mvm_start);
-    // test_fprintf("mvm start %llu us, end %llu us\n", mvm_start, mvm_end);
-    return 0;
+    shm_read_cur_id = NEXT(shm_read_cur_id);  
+#ifdef TEST_TIME  
+    user_read_end[read_end_cur++] = gettime();
+#endif
+    return len;
 }
+
+#ifdef TEST_TIME
+    void record_test_result() {
+        char filename[100];
+        memset(filename, '\0', sizeof(filename));
+        // kernel records the result first
+        ioctl(shyper_fd, 0x1308, filename);
+        test_fprintf("Record test result to %s\n", filename);
+        FILE *fp = fopen(filename, "a+");
+        if(fp == NULL){
+            perror("fopen");
+            exit(EXIT_FAILURE);
+        }
+        for (int i = 0; i < write_start_cur; ++i)
+            fprintf(fp, "%llu ", user_write_start[i]);
+        fprintf(fp, "\n");
+        for (int i = 0; i < write_end_cur; ++i)
+            fprintf(fp, "%llu ", user_write_end[i]);
+        fprintf(fp, "\n");
+        for (int i = 0; i < signal_cur; ++i)
+            fprintf(fp, "%llu ", user_signal[i]);
+        fprintf(fp, "\n");
+        for (int i = 0; i < read_end_cur; ++i)
+            fprintf(fp, "%llu ", user_read_end[i]);
+        fprintf(fp, "\n");
+        for(int i = 0; i < read_end_cur; i++)
+            fprintf(fp, "%llu ", user_read_end[i] - user_write_start[i]);
+        fprintf(fp, "\n");
+        fclose(fp);
+    }
+
+    u64 get_recv_message_checksum() {
+        u64 checksum = 0, mod = 1e9 + 7;
+        int len = strlen(temp_msg);
+        for(int i = 0; i < len; i++)
+            checksum = (checksum * 256 % mod + temp_msg[i]) % mod;
+        return checksum;
+    }
+#endif
+
+void close_shmem() {
+    // TODO: close all shmem
+    ioctl(shyper_fd, 0x1305, NULL);
+    close(shyper_fd);
+    close(mem_fd);
+}
+
+

@@ -18,6 +18,7 @@
         "string.h": "c",
         "strings.h": "c",
         "irqnr.h": "c",
-        "time.h": "c"
+        "time.h": "c",
+        "typeinfo": "c"
     }
 }
