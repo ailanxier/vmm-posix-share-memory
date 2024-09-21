@@ -1,18 +1,18 @@
 #include "include/posix_shmem.h"
 #include "include/test_utils.h"
 
-const char VALID   = 1;
-const char INVALID = 0;
-int shm_write_cur_id, shm_read_cur_id;
-char *shm_write_start[SHMEM_NUM];
-char *shm_read_start[SHMEM_NUM];
-char *shm_write_pointer[SHMEM_NUM];
-char *shm_read_pointer[SHMEM_NUM];
+char *shm_send_start[SHMEM_NUM];
+char *shm_recv_start[SHMEM_NUM];
+char *shm_send_pointer[SHMEM_NUM];
+char *shm_recv_pointer[SHMEM_NUM];
 char temp_msg[SHMEM_SIZE], shmem_name[SHMEM_NAME_MAX_LEN];
+int *ack_send_start, *ack_recv_start;
+int shm_send_cur_id, shm_recv_cur_id, send_seq_num, recv_ack_num, recv_seq_num;
+int shyper_fd, mem_fd;
 
 #ifdef TEST_TIME
-    int shyper_fd, mem_fd, pid, write_start_cur, write_end_cur, signal_cur, read_end_cur;
-    u64* user_write_start, * user_write_end, * user_signal, * user_read_end;
+    int pid, send_start_cur, send_end_cur, signal_cur, recv_end_cur;
+    u64* user_send_start, * user_send_end, * user_signal, * user_recv_end;
 #endif
 
 int shyper_shm_open(const char *name, int oflag, mode_t mode) {
@@ -128,25 +128,36 @@ void init_shmem(int test_cnt) {
 #ifdef TEST_TIME
     // set kernel timer
     ioctl(shyper_fd, 0x1300, test_cnt);
-    user_write_start = (u64 *)malloc(sizeof(u64) * test_cnt);
-    user_write_end = (u64 *)malloc(sizeof(u64) * test_cnt);
+    user_send_start = (u64 *)malloc(sizeof(u64) * test_cnt);
+    user_send_end = (u64 *)malloc(sizeof(u64) * test_cnt);
     user_signal = (u64 *)malloc(sizeof(u64) * test_cnt);
-    user_read_end = (u64 *)malloc(sizeof(u64) * test_cnt);
-    if (user_write_start == NULL || user_read_end == NULL) {
+    user_recv_end = (u64 *)malloc(sizeof(u64) * test_cnt);
+    if (user_send_start == NULL || user_recv_end == NULL) {
         perror("failed to malloc mvm_start and mvm_end");
         exit(EXIT_FAILURE);
     }
-    write_start_cur = read_end_cur = 0;
+    send_start_cur = recv_end_cur = 0;
 #endif
     for (int i = 0; i < SHMEM_NUM; i++) {
-        sprintf(shmem_name, "%s_%d", MVM_WRITE_NAME, i);
-        shm_write_pointer[i] = shm_write_start[i] = open_new_shmem(shmem_name, SHMEM_SIZE);
-        sprintf(shmem_name, "%s_%d", MVM_READ_NAME, i);
-        shm_read_pointer[i] = shm_read_start[i] = open_new_shmem(shmem_name, SHMEM_SIZE);
+        sprintf(shmem_name, "%s_%d", MVM_SEND_NAME, i);
+        shm_send_pointer[i] = shm_send_start[i] = open_new_shmem(shmem_name, SHMEM_SIZE);
+        sprintf(shmem_name, "%s_%d", MVM_RECV_NAME, i);
+        shm_recv_pointer[i] = shm_recv_start[i] = open_new_shmem(shmem_name, SHMEM_SIZE);
     }
-    test_fprintf("Share memory %s_0 ~ %d and %s_0 ~ %d are created\n", MVM_WRITE_NAME, SHMEM_NUM - 1, MVM_READ_NAME, SHMEM_NUM - 1);
-    shm_write_cur_id = shm_read_cur_id = 0;
+    if (SHMEM_NUM > SHMEM_SIZE) {
+        test_fprintf("current setting is not supported for SHMEM_NUM > SHMEM_SIZE\n");
+        exit(EXIT_FAILURE);
+    }
+    ack_send_start = (int *)open_new_shmem(MVM_ACK_SEND_NAME, SHMEM_SIZE);
+    ack_recv_start = (int *)open_new_shmem(MVM_ACK_RECV_NAME, SHMEM_SIZE);
+    bzero(ack_send_start, SHMEM_SIZE);
+    bzero(ack_recv_start, SHMEM_SIZE);
+    test_fprintf("Share memory %s_0 ~ %d and %s_0 ~ %d are created\n", MVM_RECV_NAME, SHMEM_NUM - 1, MVM_SEND_NAME, SHMEM_NUM - 1);
+    shm_send_cur_id = shm_recv_cur_id = 0;
+    send_seq_num = recv_seq_num = 1;
+    recv_ack_num = send_seq_num + 1;
 
+    // use signal to notify MVM to receive message
     struct sigaction sa_usr1;
     sa_usr1.sa_handler = signal_recv_message_wrapper;
     sa_usr1.sa_flags = 0;
@@ -156,42 +167,62 @@ void init_shmem(int test_cnt) {
 
 // Endianness must be the same. Zephyr is little-endian.
 int set_shmem_data(int shm_id, const char *data, int size) {
-    char *wp = shm_write_pointer[shm_id];
-    if(wp + size > shm_write_start[shm_id] + SHMEM_SIZE) {
-        test_fprintf("failed to write new data to %s_%d since size %d KB is too large\n", MVM_WRITE_NAME, shm_id, size);
+    char *wp = shm_send_pointer[shm_id];
+    if(wp + size > shm_send_start[shm_id] + SHMEM_SIZE) {
+        test_fprintf("failed to write new data to %s_%d since size %d KB is too large\n", MVM_RECV_NAME, shm_id, size);
         return -1;
     }
     memcpy(wp, data, size);
-    shm_write_pointer[shm_id] = wp + size;
+    shm_send_pointer[shm_id] = wp + size;
     return 0;
 }
     
 int get_shmem_data(int shm_id, char *data, int size) {
-    char *rp = shm_read_pointer[shm_id];
-    if(rp + size > shm_read_start[shm_id] + SHMEM_SIZE) {
-        test_fprintf("failed to read data from %s_%d since size %d KB is too large\n", MVM_READ_NAME, shm_id, size);
+    char *rp = shm_recv_pointer[shm_id];
+    if(rp + size > shm_recv_start[shm_id] + SHMEM_SIZE) {
+        test_fprintf("failed to read data from %s_%d since size %d KB is too large\n", MVM_SEND_NAME, shm_id, size);
         return -1;
     }
     memcpy(data, rp, size);
-    shm_read_pointer[shm_id] = rp + size;
+    shm_recv_pointer[shm_id] = rp + size;
     return 0;
 }
 
-int is_valid(int shm_id, int is_write) {
-    if(is_write){
-        // get_shmem_data is not supported for write
-        char *rd = shm_write_start[shm_id];
-        return *rd == VALID;
-    }else{
-        char flag;
-        shm_read_pointer[shm_id] = shm_read_start[shm_id];
-        get_shmem_data(shm_id, &flag, sizeof(char));
-        return flag == VALID;
+// set the flag to seq_num after sending a message
+void set_seq_num(int shm_id, int seq_num) {
+    shm_send_pointer[shm_id] = shm_send_start[shm_id];
+    set_shmem_data(shm_id, (char *)&seq_num, sizeof(int));
+}
+
+// set the flag to ack_num after receiving a message
+void set_ack_num(int shm_id, int ack_num) {
+    int *wr = ack_send_start + shm_id;
+    *wr = ack_num;
+}
+
+int is_valid(int shm_id, int is_send) {
+    if(is_send){
+        // when MVM send a message to GVM, check if the ack_num is equal to recv_ack_num
+        // to ensure the message is received by GVM
+        int *rp = ack_recv_start + shm_id;
+        if(*rp == recv_ack_num){
+            recv_ack_num ++;
+            return 1;
+        }else return 0;
+    }
+    else{
+        int recv_num;
+        shm_recv_pointer[shm_id] = shm_recv_start[shm_id];
+        get_shmem_data(shm_id, (char *)&recv_num, sizeof(int));
+        if(recv_num == recv_seq_num){
+            recv_seq_num ++;
+            return 1;
+        }else return 0;
     }
 }
 
 void notify_gvm(int shm_id) {
-    sprintf(shmem_name, "%s_%d", MVM_WRITE_NAME, shm_id);
+    sprintf(shmem_name, "%s_%d", MVM_RECV_NAME, shm_id);
     struct shm_notify notify;
     notify.name = shmem_name;
     notify.name_len = strlen(shmem_name);
@@ -202,47 +233,53 @@ int send_message(int len, const char *data) {
 #ifdef TEST_TIME
     // static int cnt = 0;
     // test_fprintf("send cnt:%d\n", cnt++);
-    user_write_start[write_start_cur++] = gettime();
+    user_send_start[send_start_cur++] = gettime();
 #endif
-    if(is_valid(shm_write_cur_id, WRITE)){
-        test_fprintf("shmem pool %s is full, cur shm_id is %d\n", MVM_WRITE_NAME, shm_write_cur_id);
+    static int sendFailtime = 0;
+    if(!is_valid(shm_send_cur_id, SEND) && send_seq_num > SHMEM_NUM){
+        if(sendFailtime <= 200){
+            sendFailtime++;
+            test_fprintf("send_message fail: shmem pool %s_%d is full, send_seq_num = %d, recv_ack_num = %d\n", 
+                MVM_SEND_NAME, shm_send_cur_id, send_seq_num, recv_ack_num, recv_seq_num);
+            if(sendFailtime % 20 == 0){
+                for(int i = 0; i < SHMEM_NUM; i++){
+                    int *num = (int *)ack_recv_start + i;
+                    test_fprintf("recv_ack_number[%d] = %d\n", i, *num);
+                }
+            }
+        }
         return ERROR_SHM_FULL;
     }
-    shm_write_pointer[shm_write_cur_id] = shm_write_start[shm_write_cur_id] + sizeof(VALID);
-    set_shmem_data(shm_write_cur_id, (char *)&len, sizeof(int));
-    set_shmem_data(shm_write_cur_id, data, len * sizeof(char));
-
-    // set the flag to VALID after writing the message
-    shm_write_pointer[shm_write_cur_id] = shm_write_start[shm_write_cur_id];
-    set_shmem_data(shm_write_cur_id, &VALID, sizeof(char));
+    sendFailtime = 0;
+    shm_send_pointer[shm_send_cur_id] = shm_send_start[shm_send_cur_id] + sizeof(int);
+    set_shmem_data(shm_send_cur_id, (char *)&len, sizeof(int));
+    set_shmem_data(shm_send_cur_id, data, len * sizeof(char));
+    set_seq_num(shm_send_cur_id, send_seq_num++);
 
 #ifdef TEST_TIME
-    user_write_end[write_end_cur++] = gettime();
+    user_send_end[send_end_cur++] = gettime();
 #endif    
-    notify_gvm(shm_write_cur_id);
-    shm_write_cur_id = NEXT(shm_write_cur_id);
+    // notify_gvm(shm_send_cur_id);
+    shm_send_cur_id = NEXT(shm_send_cur_id);
     return 0;
 }
 
 int recv_message(char *data) {
-    if(!is_valid(shm_read_cur_id, READ)){
-        test_fprintf("shmem pool %s is empty, cur shm_id is %d\n", MVM_READ_NAME, shm_read_cur_id);
+    if(!is_valid(shm_recv_cur_id, RECV)){
+        test_fprintf("recv_message fail: shmem pool %s_%d is empty\n", MVM_SEND_NAME, shm_recv_cur_id);
         return ERROR_SHM_EMPTY;
     }
 
-    shm_read_pointer[shm_read_cur_id] = shm_read_start[shm_read_cur_id] + sizeof(VALID);
     int len;
-    get_shmem_data(shm_read_cur_id, (char *)&len, sizeof(int));
-    get_shmem_data(shm_read_cur_id, data, len * sizeof(char));
+    get_shmem_data(shm_recv_cur_id, (char *)&len, sizeof(int));
+    get_shmem_data(shm_recv_cur_id, data, len * sizeof(char));
     data[len] = '\0';
 
     // set the flag to INVALID after reading the message
-    char *wr = shm_read_start[shm_read_cur_id];
-    *wr = INVALID;
-
-    shm_read_cur_id = NEXT(shm_read_cur_id);  
+    set_ack_num(shm_recv_cur_id, recv_seq_num);
+    shm_recv_cur_id = NEXT(shm_recv_cur_id);  
 #ifdef TEST_TIME  
-    user_read_end[read_end_cur++] = gettime();
+    user_recv_end[recv_end_cur++] = gettime();
 #endif
     return len;
 }
@@ -259,20 +296,20 @@ int recv_message(char *data) {
             perror("fopen");
             exit(EXIT_FAILURE);
         }
-        for (int i = 0; i < write_start_cur; ++i)
-            fprintf(fp, "%llu ", user_write_start[i]);
+        for (int i = 0; i < send_start_cur; ++i)
+            fprintf(fp, "%llu ", user_send_start[i]);
         fprintf(fp, "\n");
-        for (int i = 0; i < write_end_cur; ++i)
-            fprintf(fp, "%llu ", user_write_end[i]);
+        for (int i = 0; i < send_end_cur; ++i)
+            fprintf(fp, "%llu ", user_send_end[i]);
         fprintf(fp, "\n");
         for (int i = 0; i < signal_cur; ++i)
             fprintf(fp, "%llu ", user_signal[i]);
         fprintf(fp, "\n");
-        for (int i = 0; i < read_end_cur; ++i)
-            fprintf(fp, "%llu ", user_read_end[i]);
+        for (int i = 0; i < recv_end_cur; ++i)
+            fprintf(fp, "%llu ", user_recv_end[i]);
         fprintf(fp, "\n");
-        for(int i = 0; i < read_end_cur; i++)
-            fprintf(fp, "%llu ", user_read_end[i] - user_write_start[i]);
+        for(int i = 0; i < recv_end_cur; i++)
+            fprintf(fp, "%llu ", user_recv_end[i] - user_send_start[i]);
         fprintf(fp, "\n");
         fclose(fp);
     }

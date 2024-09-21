@@ -2,13 +2,13 @@
 CC = $(CROSS_COMPILE)gcc
 
 # Compiler flags
-CFLAGS = -g -DTEST_TIME
-# CFLAGS = -g
+# CFLAGS = -g -DTEST_TIME
+CFLAGS = -g
 
 # Source files
-LIB_SRCS = src/vm_shmem_rtt.c
+LIB_SRCS = src/posix_shmem.c
 
-TEST_SRCS ?= test/vm_shmem_rtt.c
+TEST_SRCS ?= test/bug_sync.c
 # TEST_SRCS ?= test/sleep_loop.c
 
 # Output executable

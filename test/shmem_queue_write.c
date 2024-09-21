@@ -18,9 +18,9 @@ int main(int argc, char *argv[]) {
         for(register int j = 0; j < total; j++)
             num[j] = rand() % 1000;
         register int cnt = 0;
-        register char *right = ((char *)shm_write_start[i] + actual_wr_size);
+        register char *right = ((char *)shm_send_start[i] + actual_wr_size);
     
-        while (shm_write_pointer[i] + sizeof(int) <= right) {
+        while (shm_send_pointer[i] + sizeof(int) <= right) {
             set_shmem_data(i, (char *)&num[cnt], sizeof(int));
             write_sum += num[cnt++];
         }
@@ -31,8 +31,8 @@ int main(int argc, char *argv[]) {
     int read_flag, temp;
     scanf("%d", &read_flag);
     for (int i = 0; i < SHMEM_NUM; i++) {
-        register char *right = (char *)shm_read_start[i] + actual_wr_size;
-        while (shm_read_pointer[i] + sizeof(int) <= right) {
+        register char *right = (char *)shm_recv_start[i] + actual_wr_size;
+        while (shm_recv_pointer[i] + sizeof(int) <= right) {
             get_shmem_data(i, (char *)&temp, sizeof(int));
             read_sum += temp;
         }

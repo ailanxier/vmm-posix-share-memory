@@ -7,7 +7,7 @@
 #include "../src/include/posix_shmem.h"
 #include "../src/include/test_utils.h"
 char * msg;
-int size = SHMEM_SIZE - sizeof(int) - sizeof(char);
+int size = SHMEM_SIZE - sizeof(int) - sizeof(int);
 int test_cnt;
 u64 checksum = 0, mod = 1e9 + 7;
 
@@ -24,9 +24,9 @@ int main(int argc, char *argv[]) {
     msg = (char *)malloc(size);
     test_cnt = atoi(argv[1]);
     init_shmem(test_cnt);
-    struct timespec req, rem;
-    req.tv_sec = 0;
-    req.tv_nsec = 1000000; // 1 ms
+    // struct timespec req, rem;
+    // req.tv_sec = 0;
+    // req.tv_nsec = 1000000; // 1 ms
     
     generate_message();
     while(test_cnt--){

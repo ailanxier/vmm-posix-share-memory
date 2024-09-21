@@ -13,22 +13,24 @@
 #include <unistd.h>
 #include <signal.h>
 
-#define MVM_READ_NAME  "mvm_read_shmem"
-#define MVM_WRITE_NAME "mvm_write_shmem"
+#define MVM_SEND_NAME        "mvm_send_shmem"
+#define MVM_RECV_NAME        "mvm_recv_shmem"
+#define MVM_ACK_RECV_NAME    "mvm_ack_recv_shmem"
+#define MVM_ACK_SEND_NAME    "mvm_ack_send_shmem"
 #define SHMEM_NAME_MAX_LEN 100
 #define SHMEM_SIZE 4096
-#define SHMEM_NUM 20
+#define SHMEM_NUM 1000
 #define u64 unsigned long long
 #define MAP_FAILED ((void *) -1)
 #define NEXT(x) ((x + 1) % SHMEM_NUM)
-#define WRITE   1
-#define READ    0
+#define SEND   1
+#define RECV   0
 #define ERROR_SHM_FULL  10
 #define ERROR_SHM_EMPTY -1
-extern char *shm_read_start[SHMEM_NUM];
-extern char *shm_write_start[SHMEM_NUM];
-extern char *shm_write_pointer[SHMEM_NUM];
-extern char *shm_read_pointer[SHMEM_NUM];
+extern char *shm_recv_start[SHMEM_NUM];
+extern char *shm_send_start[SHMEM_NUM];
+extern char *shm_send_pointer[SHMEM_NUM];
+extern char *shm_recv_pointer[SHMEM_NUM];
 
 struct shm_name {
     char *name;
