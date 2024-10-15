@@ -18,19 +18,22 @@
 #define MVM_ACK_RECV_NAME    "mvm_ack_recv_shmem"
 #define MVM_ACK_SEND_NAME    "mvm_ack_send_shmem"
 #define SHMEM_NAME_MAX_LEN 100
-#define SHMEM_SIZE 4096
-#define SHMEM_NUM 1000
+#define SHMEM_SIZE    4096
+#define SHMEM_NUM     1000
+#define SEQ_NUM_MOD   19260817
 #define u64 unsigned long long
 #define MAP_FAILED ((void *) -1)
-#define NEXT(x) ((x + 1) % SHMEM_NUM)
+#define NEXT_ID(x) ((x + 1) % SHMEM_NUM)
+#define NEXT_SEQ_NUM(x) ((x + 1) % SEQ_NUM_MOD)
 #define SEND   1
 #define RECV   0
-#define ERROR_SHM_FULL  10
-#define ERROR_SHM_EMPTY -1
+#define ERROR_SHM_FULL           10
+#define ERROR_SHM_EMPTY          -1
 extern char *shm_recv_start[SHMEM_NUM];
 extern char *shm_send_start[SHMEM_NUM];
 extern char *shm_send_pointer[SHMEM_NUM];
 extern char *shm_recv_pointer[SHMEM_NUM];
+static const u64 MOD = 1e9 + 7;
 
 struct shm_name {
     char *name;
@@ -100,6 +103,8 @@ int get_shmem_data(int shm_id, char *data, int size);
 int send_message(int len, const char *data);
 
 int recv_message(char *data);
+
+int validate_checksum(char *data, int len);
 
 void close_shmem();
 

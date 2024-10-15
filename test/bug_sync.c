@@ -9,31 +9,36 @@
 char * msg;
 int size = SHMEM_SIZE - sizeof(int) - sizeof(int);
 int test_cnt;
-u64 checksum = 0, mod = 1e9 + 7;
+u64 checksum = 0;
 
 void generate_message(){
     checksum = 0;
-    for(int i = 0; i < size; i++){
-        msg[i] = 'a' + rand() % 26;
-        // checksum = (checksum * 256 % mod + msg[i]) % mod;
+    // int data_size = size - sizeof(u64);
+    int data_size = size;
+    for(int i = 0; i < data_size; i++){
+        msg[i] = rand() % 256;
+        // checksum = (checksum * 256 % MOD + msg[i]) % MOD;
+    }
+    // memcpy(msg + data_size, &checksum, sizeof(u64));
+}
+
+void change_message(){
+    int cnt = rand() % 10;
+    for(int i = 0; i < cnt; i++){
+        int pos = rand() % size;
+        msg[pos] = rand() % 256;
     }
 }
 
-int main(int argc, char *argv[]) {
+int main() {
     srand((unsigned int)time(NULL));
     msg = (char *)malloc(size);
-    test_cnt = atoi(argv[1]);
-    init_shmem(test_cnt);
-    // struct timespec req, rem;
-    // req.tv_sec = 0;
-    // req.tv_nsec = 1000000; // 1 ms
-    
-    generate_message();
-    while(test_cnt--){
+    init_shmem(0);
+    u64 cnt = 0;
+    generate_message();        
+    while(1){
+        change_message();
         send_message(size, msg);
-        // while (nanosleep(&req, &rem) == -1) {
-        //     req = rem; // 信号处理程序返回时继续睡眠，保证至少隔 1ms 
-        // }
     }
     // record_test_result();
     // close_shmem();

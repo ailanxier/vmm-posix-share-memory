@@ -9,6 +9,7 @@ char temp_msg[SHMEM_SIZE], shmem_name[SHMEM_NAME_MAX_LEN];
 int *ack_send_start, *ack_recv_start;
 int shm_send_cur_id, shm_recv_cur_id, send_seq_num, recv_ack_num, recv_seq_num;
 int shyper_fd, mem_fd;
+struct shm_notify notify;
 
 #ifdef TEST_TIME
     int pid, send_start_cur, send_end_cur, signal_cur, recv_end_cur;
@@ -155,7 +156,7 @@ void init_shmem(int test_cnt) {
     test_fprintf("Share memory %s_0 ~ %d and %s_0 ~ %d are created\n", MVM_RECV_NAME, SHMEM_NUM - 1, MVM_SEND_NAME, SHMEM_NUM - 1);
     shm_send_cur_id = shm_recv_cur_id = 0;
     send_seq_num = recv_seq_num = 1;
-    recv_ack_num = send_seq_num + 1;
+    recv_ack_num = NEXT_SEQ_NUM(send_seq_num);
 
     // use signal to notify MVM to receive message
     struct sigaction sa_usr1;
@@ -206,7 +207,7 @@ int is_valid(int shm_id, int is_send) {
         // to ensure the message is received by GVM
         int *rp = ack_recv_start + shm_id;
         if(*rp == recv_ack_num){
-            recv_ack_num ++;
+            recv_ack_num = NEXT_SEQ_NUM(recv_ack_num);
             return 1;
         }else return 0;
     }
@@ -215,7 +216,7 @@ int is_valid(int shm_id, int is_send) {
         shm_recv_pointer[shm_id] = shm_recv_start[shm_id];
         get_shmem_data(shm_id, (char *)&recv_num, sizeof(int));
         if(recv_num == recv_seq_num){
-            recv_seq_num ++;
+            recv_seq_num = NEXT_SEQ_NUM(recv_seq_num);
             return 1;
         }else return 0;
     }
@@ -223,7 +224,6 @@ int is_valid(int shm_id, int is_send) {
 
 void notify_gvm(int shm_id) {
     sprintf(shmem_name, "%s_%d", MVM_RECV_NAME, shm_id);
-    struct shm_notify notify;
     notify.name = shmem_name;
     notify.name_len = strlen(shmem_name);
     ioctl(shyper_fd, 0x1307, &notify);
@@ -231,12 +231,11 @@ void notify_gvm(int shm_id) {
 
 int send_message(int len, const char *data) {
 #ifdef TEST_TIME
-    // static int cnt = 0;
-    // test_fprintf("send cnt:%d\n", cnt++);
     user_send_start[send_start_cur++] = gettime();
 #endif
+    static u64 send_count = 0;
     static int sendFailtime = 0;
-    if(!is_valid(shm_send_cur_id, SEND) && send_seq_num > SHMEM_NUM){
+    if(!is_valid(shm_send_cur_id, SEND) && send_count >= SHMEM_NUM){
         if(sendFailtime <= 200){
             sendFailtime++;
             test_fprintf("send_message fail: shmem pool %s_%d is full, send_seq_num = %d, recv_ack_num = %d\n", 
@@ -251,22 +250,28 @@ int send_message(int len, const char *data) {
         return ERROR_SHM_FULL;
     }
     sendFailtime = 0;
+    // if(send_count % 1000000 == 0)
+    //     test_fprintf("MVM send cnt = %llu\n", send_count);
+    // send_count++;
+    send_count = send_count >= SHMEM_NUM ? SHMEM_NUM : send_count + 1;
     shm_send_pointer[shm_send_cur_id] = shm_send_start[shm_send_cur_id] + sizeof(int);
     set_shmem_data(shm_send_cur_id, (char *)&len, sizeof(int));
     set_shmem_data(shm_send_cur_id, data, len * sizeof(char));
-    set_seq_num(shm_send_cur_id, send_seq_num++);
+    // 写入发送序列号
+    set_seq_num(shm_send_cur_id, send_seq_num);
+    send_seq_num = NEXT_SEQ_NUM(send_seq_num);
 
 #ifdef TEST_TIME
     user_send_end[send_end_cur++] = gettime();
 #endif    
     // notify_gvm(shm_send_cur_id);
-    shm_send_cur_id = NEXT(shm_send_cur_id);
+    shm_send_cur_id = NEXT_ID(shm_send_cur_id);
     return 0;
 }
 
 int recv_message(char *data) {
     if(!is_valid(shm_recv_cur_id, RECV)){
-        test_fprintf("recv_message fail: shmem pool %s_%d is empty\n", MVM_SEND_NAME, shm_recv_cur_id);
+        test_fprintf("recv_message fail: shmem pool %s_%d is empty\n", MVM_RECV_NAME, shm_recv_cur_id);
         return ERROR_SHM_EMPTY;
     }
 
@@ -276,12 +281,29 @@ int recv_message(char *data) {
     data[len] = '\0';
 
     // set the flag to INVALID after reading the message
-    set_ack_num(shm_recv_cur_id, recv_seq_num);
-    shm_recv_cur_id = NEXT(shm_recv_cur_id);  
+    set_ack_num(shm_recv_cur_id, recv_seq_num);       
+
+    // if(validate_checksum(data, len)){
+    //     test_fprintf("checksum is incorrect in %s_%d\n", MVM_RECV_NAME, shm_recv_cur_id);
+    // }
+    shm_recv_cur_id = NEXT_ID(shm_recv_cur_id);  
+
 #ifdef TEST_TIME  
     user_recv_end[recv_end_cur++] = gettime();
 #endif
     return len;
+}
+
+int validate_checksum(char *data, int len){
+    u64 recv_checksum = 0;
+    memcpy(&recv_checksum, data + len - sizeof(u64), sizeof(u64));
+    u64 checksum = 0;
+    int data_len = len - sizeof(u64);
+    for(int i = 0; i < data_len; i++)
+        checksum = (checksum * 256 % MOD + data[i]) % MOD;
+    if(checksum != recv_checksum)
+        return -1;
+    return 0;
 }
 
 #ifdef TEST_TIME
